@@ -7,49 +7,40 @@ node_modules/
 .env.local
 .env.*
 
-# Database
-database.sqlite
-
 # Logs
 *.log
 
-# Build artifacts
-build/
-dist/
-*.o
-*.obj
-*.out
+# Coverage reports
+coverage/
+htmlcov/
+.coverage
 
-# Python
+# IDE files
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Build artifacts
+dist/
+build/
+target/
+
+# Python cache
 __pycache__/
 *.pyc
 *.pyo
 *.pyd
-.Python
-env/
-venv/
-.venv/
-pip-log.txt
-pip-delete-this-directory.txt
-.tox/
-.coverage
-.coverage.*
-.cache
-nosetests.xml
-coverage.xml
-*.cover
-*.db
-*.sqlite
 
-# IDE
-.vscode/
-.idea/
+# Temporary files
+*.tmp
+*.temp
 
-# OS
-.DS_Store
-Thumbs.db
-
-# Compressed
+# Compressed files
 *.zip
 *.gz
 *.tar

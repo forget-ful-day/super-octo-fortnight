@@ -325,7 +325,7 @@
   <a href="/admin.html" class="admin-link">Админ панель</a>
 
   <!-- Report Modal -->
-  <div class="report-modal hidden" id="reportModal">
+  <div class="report-modal hidden" id="reportModal" style="display: none;">
     <div class="report-content">
       <h3>Пожаловаться на кружок</h3>
       <textarea id="reportReason" placeholder="Опишите причину жалобы..."></textarea>
@@ -564,11 +564,15 @@
     }
 
     function showReportModal() {
-      document.getElementById('reportModal').classList.remove('hidden');
+      const modal = document.getElementById('reportModal');
+      modal.classList.remove('hidden');
+      modal.style.display = 'flex';
     }
 
     function hideReportModal() {
-      document.getElementById('reportModal').classList.add('hidden');
+      const modal = document.getElementById('reportModal');
+      modal.classList.add('hidden');
+      modal.style.display = 'none';
       document.getElementById('reportReason').value = '';
     }
 

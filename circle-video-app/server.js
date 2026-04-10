@@ -6,8 +6,7 @@ const path = require('path');
 const fs = require('fs');
 require('dotenv').config();
 
-const db = require('./database');
-const { uploadToGitHub, deleteFromGitHub } = require('./github');
+const { uploadToGitHub, deleteFromGitHub, getFromGitHub, listFilesInGitHub, updateGitHubFile } = require('./github');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -57,6 +56,23 @@ function getClientIP(req) {
   return req.ip || req.connection.remoteAddress || 'unknown';
 }
 
+// Helper function to get circles data from GitHub
+async function getCirclesData() {
+  try {
+    const content = await getFromGitHub('data/circles.json');
+    return JSON.parse(content);
+  } catch (error) {
+    // File doesn't exist yet, return empty structure
+    return { circles: [], comments: [], likes: [], complaints: [] };
+  }
+}
+
+// Helper function to save circles data to GitHub
+async function saveCirclesData(data) {
+  const content = Buffer.from(JSON.stringify(data, null, 2));
+  await updateGitHubFile('data/circles.json', content, 'application/json');
+}
+
 // API Routes
 
 // Upload a circle video
@@ -71,28 +87,30 @@ app.post('/api/circles', upload.single('video'), async (req, res) => {
     const filename = `circle_${uuidv4()}${path.extname(req.file.originalname)}`;
 
     // Upload to GitHub
-    const githubUrl = await uploadToGitHub(filename, videoContent, req.file.mimetype);
+    const githubUrl = await uploadToGitHub(`videos/${filename}`, videoContent, req.file.mimetype);
 
-    // Save to database
-    const id = uuidv4();
-    db.prepare(`
-      INSERT INTO circles (id, filename, github_url)
-      VALUES (?, ?, ?)
-    `).run(id, filename, githubUrl);
+    // Get current data
+    const data = await getCirclesData();
+    
+    // Add new circle
+    const newCircle = {
+      id: uuidv4(),
+      filename,
+      github_url: githubUrl,
+      created_at: Date.now() / 1000,
+      likes: 0,
+      complaints: 0,
+    };
+    
+    data.circles.push(newCircle);
+    await saveCirclesData(data);
 
     // Clean up local file
     fs.unlinkSync(videoPath);
 
     res.json({
       success: true,
-      circle: {
-        id,
-        filename,
-        github_url: githubUrl,
-        created_at: Date.now() / 1000,
-        likes: 0,
-        complaints: 0,
-      },
+      circle: newCircle,
     });
   } catch (error) {
     console.error('Error uploading circle:', error);
@@ -101,32 +119,28 @@ app.post('/api/circles', upload.single('video'), async (req, res) => {
 });
 
 // Get a random circle (not the one specified)
-app.get('/api/circles/random', (req, res) => {
+app.get('/api/circles/random', async (req, res) => {
   try {
     const excludeId = req.query.exclude;
     
-    let query;
-    let params;
+    const data = await getCirclesData();
+    let circles = data.circles || [];
     
     if (excludeId) {
-      query = 'SELECT * FROM circles WHERE id != ? ORDER BY RANDOM() LIMIT 1';
-      params = [excludeId];
-    } else {
-      query = 'SELECT * FROM circles ORDER BY RANDOM() LIMIT 1';
-      params = [];
+      circles = circles.filter(c => c.id !== excludeId);
     }
-
-    const circle = db.prepare(query).get(...params);
-
-    if (!circle) {
+    
+    if (circles.length === 0) {
       return res.json({ circle: null });
     }
-
+    
+    // Pick random circle
+    const randomIndex = Math.floor(Math.random() * circles.length);
+    const circle = circles[randomIndex];
+    
     // Get comments for this circle
-    const comments = db.prepare(`
-      SELECT * FROM comments WHERE circle_id = ? ORDER BY created_at DESC
-    `).all(circle.id);
-
+    const comments = (data.comments || []).filter(c => c.circle_id === circle.id);
+    
     res.json({
       circle: {
         ...circle,
@@ -140,10 +154,10 @@ app.get('/api/circles/random', (req, res) => {
 });
 
 // Get all circles (for admin)
-app.get('/api/circles', (req, res) => {
+app.get('/api/circles', async (req, res) => {
   try {
-    const circles = db.prepare('SELECT * FROM circles ORDER BY created_at DESC').all();
-    res.json({ circles });
+    const data = await getCirclesData();
+    res.json({ circles: data.circles || [] });
   } catch (error) {
     console.error('Error getting circles:', error);
     res.status(500).json({ error: 'Failed to get circles' });
@@ -151,31 +165,37 @@ app.get('/api/circles', (req, res) => {
 });
 
 // Like a circle
-app.post('/api/circles/:id/like', (req, res) => {
+app.post('/api/circles/:id/like', async (req, res) => {
   try {
     const { id } = req.params;
     const userIp = getClientIP(req);
-
+    
+    const data = await getCirclesData();
+    
     // Check if already liked
-    const existingLike = db.prepare(`
-      SELECT * FROM likes WHERE circle_id = ? AND user_ip = ?
-    `).get(id, userIp);
-
+    const existingLike = (data.likes || []).find(l => l.circle_id === id && l.user_ip === userIp);
+    
     if (existingLike) {
       return res.status(400).json({ error: 'Already liked this circle' });
     }
-
+    
     // Add like
-    db.prepare(`
-      INSERT INTO likes (id, circle_id, user_ip)
-      VALUES (?, ?, ?)
-    `).run(uuidv4(), id, userIp);
-
+    data.likes = data.likes || [];
+    data.likes.push({
+      id: uuidv4(),
+      circle_id: id,
+      user_ip: userIp,
+      created_at: Date.now() / 1000,
+    });
+    
     // Update likes count
-    db.prepare(`
-      UPDATE circles SET likes = likes + 1 WHERE id = ?
-    `).run(id);
-
+    const circle = data.circles.find(c => c.id === id);
+    if (circle) {
+      circle.likes = (circle.likes || 0) + 1;
+    }
+    
+    await saveCirclesData(data);
+    
     res.json({ success: true });
   } catch (error) {
     console.error('Error liking circle:', error);
@@ -184,30 +204,33 @@ app.post('/api/circles/:id/like', (req, res) => {
 });
 
 // Add comment to a circle
-app.post('/api/circles/:id/comments', (req, res) => {
+app.post('/api/circles/:id/comments', async (req, res) => {
   try {
     const { id } = req.params;
     const { author, content } = req.body;
-
+    
     if (!author || !content) {
       return res.status(400).json({ error: 'Author and content are required' });
     }
-
-    const commentId = uuidv4();
-    db.prepare(`
-      INSERT INTO comments (id, circle_id, author, content)
-      VALUES (?, ?, ?, ?)
-    `).run(commentId, id, author, content);
-
+    
+    const data = await getCirclesData();
+    
+    const newComment = {
+      id: uuidv4(),
+      circle_id: id,
+      author,
+      content,
+      created_at: Date.now() / 1000,
+    };
+    
+    data.comments = data.comments || [];
+    data.comments.push(newComment);
+    
+    await saveCirclesData(data);
+    
     res.json({
       success: true,
-      comment: {
-        id: commentId,
-        circle_id: id,
-        author,
-        content,
-        created_at: Date.now() / 1000,
-      },
+      comment: newComment,
     });
   } catch (error) {
     console.error('Error adding comment:', error);
@@ -216,49 +239,57 @@ app.post('/api/circles/:id/comments', (req, res) => {
 });
 
 // Report a circle
-app.post('/api/circles/:id/report', (req, res) => {
+app.post('/api/circles/:id/report', async (req, res) => {
   try {
     const { id } = req.params;
     const { reason } = req.body;
     const userIp = getClientIP(req);
-
+    
     if (!reason) {
       return res.status(400).json({ error: 'Reason is required' });
     }
-
+    
+    const data = await getCirclesData();
+    
     // Check if already reported
-    const existingReport = db.prepare(`
-      SELECT * FROM complaints WHERE circle_id = ? AND user_ip = ?
-    `).get(id, userIp);
-
+    const existingReport = (data.complaints || []).find(c => c.circle_id === id && c.user_ip === userIp);
+    
     if (existingReport) {
       return res.status(400).json({ error: 'Already reported this circle' });
     }
-
+    
     // Add complaint
-    db.prepare(`
-      INSERT INTO complaints (id, circle_id, user_ip, reason)
-      VALUES (?, ?, ?, ?)
-    `).run(uuidv4(), id, userIp, reason);
-
+    data.complaints = data.complaints || [];
+    data.complaints.push({
+      id: uuidv4(),
+      circle_id: id,
+      user_ip: userIp,
+      reason,
+      created_at: Date.now() / 1000,
+    });
+    
     // Update complaints count
-    db.prepare(`
-      UPDATE circles SET complaints = complaints + 1 WHERE id = ?
-    `).run(id);
-
-    // Check if complaints exceed 5
-    const circle = db.prepare('SELECT * FROM circles WHERE id = ?').get(id);
-    if (circle && circle.complaints + 1 >= 5) {
-      // Delete from GitHub
-      deleteFromGitHub(circle.filename).catch(console.error);
+    const circle = data.circles.find(c => c.id === id);
+    if (circle) {
+      circle.complaints = (circle.complaints || 0) + 1;
       
-      // Delete from database
-      db.prepare('DELETE FROM circles WHERE id = ?').run(id);
-      db.prepare('DELETE FROM comments WHERE circle_id = ?').run(id);
-      db.prepare('DELETE FROM likes WHERE circle_id = ?').run(id);
-      db.prepare('DELETE FROM complaints WHERE circle_id = ?').run(id);
+      // Check if complaints reached 5
+      if (circle.complaints >= 5) {
+        // Delete from GitHub
+        if (circle.filename) {
+          deleteFromGitHub(`videos/${circle.filename}`).catch(console.error);
+        }
+        
+        // Remove circle and related data
+        data.circles = data.circles.filter(c => c.id !== id);
+        data.comments = (data.comments || []).filter(c => c.circle_id !== id);
+        data.likes = (data.likes || []).filter(l => l.circle_id !== id);
+        data.complaints = (data.complaints || []).filter(c => c.circle_id !== id);
+      }
     }
-
+    
+    await saveCirclesData(data);
+    
     res.json({ success: true });
   } catch (error) {
     console.error('Error reporting circle:', error);
@@ -271,21 +302,26 @@ app.delete('/api/admin/circles/:id', async (req, res) => {
   try {
     const { id } = req.params;
     
-    const circle = db.prepare('SELECT * FROM circles WHERE id = ?').get(id);
+    const data = await getCirclesData();
+    const circle = (data.circles || []).find(c => c.id === id);
     
     if (!circle) {
       return res.status(404).json({ error: 'Circle not found' });
     }
-
+    
     // Delete from GitHub
-    await deleteFromGitHub(circle.filename);
-
-    // Delete from database
-    db.prepare('DELETE FROM circles WHERE id = ?').run(id);
-    db.prepare('DELETE FROM comments WHERE circle_id = ?').run(id);
-    db.prepare('DELETE FROM likes WHERE circle_id = ?').run(id);
-    db.prepare('DELETE FROM complaints WHERE circle_id = ?').run(id);
-
+    if (circle.filename) {
+      await deleteFromGitHub(`videos/${circle.filename}`);
+    }
+    
+    // Remove from data
+    data.circles = data.circles.filter(c => c.id !== id);
+    data.comments = (data.comments || []).filter(c => c.circle_id !== id);
+    data.likes = (data.likes || []).filter(l => l.circle_id !== id);
+    data.complaints = (data.complaints || []).filter(c => c.circle_id !== id);
+    
+    await saveCirclesData(data);
+    
     res.json({ success: true });
   } catch (error) {
     console.error('Error deleting circle:', error);
@@ -294,16 +330,22 @@ app.delete('/api/admin/circles/:id', async (req, res) => {
 });
 
 // Admin: Get all complaints
-app.get('/api/admin/complaints', (req, res) => {
+app.get('/api/admin/complaints', async (req, res) => {
   try {
-    const complaints = db.prepare(`
-      SELECT c.*, ci.github_url, ci.filename
-      FROM complaints c
-      JOIN circles ci ON c.circle_id = ci.id
-      ORDER BY c.created_at DESC
-    `).all();
-
-    res.json({ complaints });
+    const data = await getCirclesData();
+    const complaints = data.complaints || [];
+    
+    // Enrich with circle info
+    const enrichedComplaints = complaints.map(c => {
+      const circle = data.circles.find(ci => ci.id === c.circle_id);
+      return {
+        ...c,
+        github_url: circle ? circle.github_url : null,
+        filename: circle ? circle.filename : null,
+      };
+    });
+    
+    res.json({ complaints: enrichedComplaints });
   } catch (error) {
     console.error('Error getting complaints:', error);
     res.status(500).json({ error: 'Failed to get complaints' });
@@ -311,13 +353,15 @@ app.get('/api/admin/complaints', (req, res) => {
 });
 
 // Admin: Get stats
-app.get('/api/admin/stats', (req, res) => {
+app.get('/api/admin/stats', async (req, res) => {
   try {
-    const totalCircles = db.prepare('SELECT COUNT(*) as count FROM circles').get().count;
-    const totalComments = db.prepare('SELECT COUNT(*) as count FROM comments').get().count;
-    const totalLikes = db.prepare('SELECT SUM(likes) as total FROM circles').get().total || 0;
-    const totalComplaints = db.prepare('SELECT COUNT(*) as count FROM complaints').get().count;
-
+    const data = await getCirclesData();
+    
+    const totalCircles = (data.circles || []).length;
+    const totalComments = (data.comments || []).length;
+    const totalLikes = (data.circles || []).reduce((sum, c) => sum + (c.likes || 0), 0);
+    const totalComplaints = (data.complaints || []).length;
+    
     res.json({
       stats: {
         totalCircles,
