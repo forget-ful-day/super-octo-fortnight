@@ -1,0 +1,616 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Circle Video Share</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      min-height: 100vh;
+      padding: 20px;
+    }
+
+    .container {
+      max-width: 600px;
+      margin: 0 auto;
+    }
+
+    h1 {
+      color: white;
+      text-align: center;
+      margin-bottom: 30px;
+      text-shadow: 2px 2px 4px rgba(0,0,0,0.3);
+    }
+
+    .card {
+      background: white;
+      border-radius: 15px;
+      padding: 25px;
+      margin-bottom: 20px;
+      box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+    }
+
+    .upload-area {
+      border: 3px dashed #667eea;
+      border-radius: 10px;
+      padding: 40px;
+      text-align: center;
+      cursor: pointer;
+      transition: all 0.3s;
+    }
+
+    .upload-area:hover {
+      background: #f0f4ff;
+      border-color: #764ba2;
+    }
+
+    .upload-area.dragover {
+      background: #e8eeff;
+      border-color: #764ba2;
+    }
+
+    .video-preview {
+      width: 300px;
+      height: 300px;
+      border-radius: 50%;
+      object-fit: cover;
+      margin: 20px auto;
+      display: block;
+      background: #000;
+    }
+
+    .circle-display {
+      width: 100%;
+      max-width: 400px;
+      aspect-ratio: 1;
+      border-radius: 50%;
+      overflow: hidden;
+      margin: 20px auto;
+      background: #000;
+      position: relative;
+    }
+
+    .circle-display video {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+    }
+
+    button {
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      color: white;
+      border: none;
+      padding: 12px 25px;
+      border-radius: 8px;
+      cursor: pointer;
+      font-size: 16px;
+      transition: transform 0.2s;
+      margin: 5px;
+    }
+
+    button:hover {
+      transform: scale(1.05);
+    }
+
+    button:disabled {
+      opacity: 0.6;
+      cursor: not-allowed;
+    }
+
+    .btn-danger {
+      background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+    }
+
+    .btn-success {
+      background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
+    }
+
+    .stats {
+      display: flex;
+      justify-content: space-around;
+      margin: 20px 0;
+    }
+
+    .stat-item {
+      text-align: center;
+    }
+
+    .stat-value {
+      font-size: 24px;
+      font-weight: bold;
+      color: #667eea;
+    }
+
+    .stat-label {
+      font-size: 12px;
+      color: #666;
+    }
+
+    .comments-section {
+      margin-top: 20px;
+      border-top: 2px solid #eee;
+      padding-top: 20px;
+    }
+
+    .comment {
+      background: #f8f9fa;
+      padding: 10px;
+      border-radius: 8px;
+      margin-bottom: 10px;
+    }
+
+    .comment-author {
+      font-weight: bold;
+      color: #667eea;
+    }
+
+    .comment-content {
+      margin-top: 5px;
+      color: #333;
+    }
+
+    .comment-form {
+      display: flex;
+      gap: 10px;
+      margin-top: 15px;
+    }
+
+    .comment-form input {
+      flex: 1;
+      padding: 10px;
+      border: 2px solid #ddd;
+      border-radius: 8px;
+      font-size: 14px;
+    }
+
+    .progress-bar {
+      width: 100%;
+      height: 5px;
+      background: #eee;
+      border-radius: 3px;
+      margin-top: 10px;
+      overflow: hidden;
+    }
+
+    .progress-fill {
+      height: 100%;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      width: 0%;
+      transition: width 0.3s;
+    }
+
+    .loading {
+      text-align: center;
+      padding: 20px;
+      color: #667eea;
+    }
+
+    .hidden {
+      display: none;
+    }
+
+    .admin-link {
+      position: fixed;
+      bottom: 20px;
+      right: 20px;
+      background: rgba(255,255,255,0.2);
+      color: white;
+      padding: 10px 15px;
+      border-radius: 8px;
+      text-decoration: none;
+      font-size: 14px;
+    }
+
+    .admin-link:hover {
+      background: rgba(255,255,255,0.3);
+    }
+
+    .actions {
+      display: flex;
+      justify-content: center;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+
+    .report-modal {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: rgba(0,0,0,0.5);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 1000;
+    }
+
+    .report-content {
+      background: white;
+      padding: 30px;
+      border-radius: 15px;
+      max-width: 400px;
+      width: 90%;
+    }
+
+    .report-content textarea {
+      width: 100%;
+      padding: 10px;
+      border: 2px solid #ddd;
+      border-radius: 8px;
+      margin: 15px 0;
+      resize: vertical;
+      min-height: 100px;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>🎬 Circle Video Share</h1>
+
+    <!-- Upload Section -->
+    <div class="card" id="uploadCard">
+      <h2 style="margin-bottom: 15px;">Загрузить свой кружок</h2>
+      <div class="upload-area" id="uploadArea">
+        <p>📁 Перетащите видео сюда или кликните для выбора</p>
+        <p style="font-size: 12px; color: #666; margin-top: 10px;">Максимальная длительность: 1 минута</p>
+        <input type="file" id="videoInput" accept="video/*" style="display: none;">
+      </div>
+      <div class="progress-bar hidden" id="uploadProgress">
+        <div class="progress-fill" id="progressFill"></div>
+      </div>
+      <video id="previewVideo" class="video-preview hidden" controls></video>
+      <div style="text-align: center; margin-top: 15px;">
+        <button id="uploadBtn" class="btn-success hidden" onclick="uploadVideo()">🚀 Загрузить</button>
+      </div>
+    </div>
+
+    <!-- View Random Circle Section -->
+    <div class="card hidden" id="viewCard">
+      <h2 style="margin-bottom: 15px;">Случайный кружок</h2>
+      <div id="circleContainer">
+        <div class="loading" id="loadingCircle">Загрузка...</div>
+        <div id="circleContent" class="hidden">
+          <div class="circle-display">
+            <video id="circleVideo" controls loop></video>
+          </div>
+          
+          <div class="stats">
+            <div class="stat-item">
+              <div class="stat-value" id="likeCount">0</div>
+              <div class="stat-label">Лайков</div>
+            </div>
+            <div class="stat-item">
+              <div class="stat-value" id="complaintCount">0</div>
+              <div class="stat-label">Жалоб</div>
+            </div>
+          </div>
+
+          <div class="actions">
+            <button onclick="likeCircle()">👍 Лайк</button>
+            <button class="btn-danger" onclick="showReportModal()">⚠️ Пожаловаться</button>
+            <button onclick="loadRandomCircle()">🔄 Другой</button>
+          </div>
+
+          <div class="comments-section">
+            <h3>Комментарии (<span id="commentCount">0</span>)</h3>
+            <div id="commentsList"></div>
+            <div class="comment-form">
+              <input type="text" id="commentAuthor" placeholder="Ваше имя">
+              <input type="text" id="commentContent" placeholder="Комментарий">
+              <button onclick="addComment()">💬</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- No Circles Message -->
+    <div class="card hidden" id="noCirclesCard">
+      <h2 style="text-align: center; color: #666;">
+        Пока нет кружков 😔<br>
+        Будьте первым!
+      </h2>
+    </div>
+  </div>
+
+  <a href="/admin.html" class="admin-link">Админ панель</a>
+
+  <!-- Report Modal -->
+  <div class="report-modal hidden" id="reportModal">
+    <div class="report-content">
+      <h3>Пожаловаться на кружок</h3>
+      <textarea id="reportReason" placeholder="Опишите причину жалобы..."></textarea>
+      <div class="actions">
+        <button onclick="submitReport()">Отправить</button>
+        <button class="btn-danger" onclick="hideReportModal()">Отмена</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    let currentCircle = null;
+    let selectedFile = null;
+
+    // Upload area events
+    const uploadArea = document.getElementById('uploadArea');
+    const videoInput = document.getElementById('videoInput');
+    const previewVideo = document.getElementById('previewVideo');
+    const uploadBtn = document.getElementById('uploadBtn');
+
+    uploadArea.addEventListener('click', () => videoInput.click());
+
+    uploadArea.addEventListener('dragover', (e) => {
+      e.preventDefault();
+      uploadArea.classList.add('dragover');
+    });
+
+    uploadArea.addEventListener('dragleave', () => {
+      uploadArea.classList.remove('dragover');
+    });
+
+    uploadArea.addEventListener('drop', (e) => {
+      e.preventDefault();
+      uploadArea.classList.remove('dragover');
+      const files = e.dataTransfer.files;
+      if (files.length > 0 && files[0].type.startsWith('video/')) {
+        handleFileSelect(files[0]);
+      }
+    });
+
+    videoInput.addEventListener('change', (e) => {
+      if (e.target.files.length > 0) {
+        handleFileSelect(e.target.files[0]);
+      }
+    });
+
+    function handleFileSelect(file) {
+      selectedFile = file;
+      
+      // Check duration
+      const video = document.createElement('video');
+      video.preload = 'metadata';
+      
+      video.onloadedmetadata = function() {
+        if (video.duration > 60) {
+          alert('Видео должно быть не длиннее 1 минуты!');
+          selectedFile = null;
+          uploadBtn.classList.add('hidden');
+          previewVideo.classList.add('hidden');
+          return;
+        }
+        
+        const url = URL.createObjectURL(file);
+        previewVideo.src = url;
+        previewVideo.classList.remove('hidden');
+        uploadBtn.classList.remove('hidden');
+      };
+      
+      video.src = URL.createObjectURL(file);
+    }
+
+    async function uploadVideo() {
+      if (!selectedFile) return;
+
+      const formData = new FormData();
+      formData.append('video', selectedFile);
+
+      const progressFill = document.getElementById('progressFill');
+      const progressBar = document.getElementById('uploadProgress');
+      progressBar.classList.remove('hidden');
+
+      try {
+        const xhr = new XMLHttpRequest();
+        
+        xhr.upload.addEventListener('progress', (e) => {
+          if (e.lengthComputable) {
+            const percent = (e.loaded / e.total) * 100;
+            progressFill.style.width = percent + '%';
+          }
+        });
+
+        xhr.addEventListener('load', () => {
+          if (xhr.status === 200) {
+            const response = JSON.parse(xhr.responseText);
+            alert('✅ Видео загружено! Теперь вы получите случайный кружок.');
+            progressBar.classList.add('hidden');
+            previewVideo.classList.add('hidden');
+            uploadBtn.classList.add('hidden');
+            selectedFile = null;
+            
+            // Load random circle (excluding the one we just uploaded)
+            loadRandomCircle(response.circle.id);
+          } else {
+            alert('❌ Ошибка загрузки: ' + xhr.responseText);
+            progressBar.classList.add('hidden');
+          }
+        });
+
+        xhr.addEventListener('error', () => {
+          alert('❌ Ошибка сети');
+          progressBar.classList.add('hidden');
+        });
+
+        xhr.open('POST', '/api/circles');
+        xhr.send(formData);
+      } catch (error) {
+        alert('❌ Ошибка: ' + error.message);
+        progressBar.classList.add('hidden');
+      }
+    }
+
+    async function loadRandomCircle(excludeId = null) {
+      document.getElementById('uploadCard').classList.add('hidden');
+      document.getElementById('noCirclesCard').classList.add('hidden');
+      document.getElementById('viewCard').classList.remove('hidden');
+      document.getElementById('loadingCircle').classList.remove('hidden');
+      document.getElementById('circleContent').classList.add('hidden');
+
+      try {
+        const url = excludeId 
+          ? `/api/circles/random?exclude=${excludeId}`
+          : '/api/circles/random';
+        
+        const response = await fetch(url);
+        const data = await response.json();
+
+        if (!data.circle) {
+          document.getElementById('loadingCircle').classList.add('hidden');
+          document.getElementById('noCirclesCard').classList.remove('hidden');
+          document.getElementById('viewCard').classList.add('hidden');
+          return;
+        }
+
+        currentCircle = data.circle;
+        
+        const video = document.getElementById('circleVideo');
+        video.src = data.circle.github_url.replace('/blob/', '/raw/');
+        
+        document.getElementById('likeCount').textContent = data.circle.likes;
+        document.getElementById('complaintCount').textContent = data.circle.complaints;
+        
+        renderComments(data.circle.comments || []);
+        
+        document.getElementById('loadingCircle').classList.add('hidden');
+        document.getElementById('circleContent').classList.remove('hidden');
+      } catch (error) {
+        alert('❌ Ошибка загрузки кружка: ' + error.message);
+        document.getElementById('loadingCircle').classList.add('hidden');
+      }
+    }
+
+    function renderComments(comments) {
+      const list = document.getElementById('commentsList');
+      document.getElementById('commentCount').textContent = comments.length;
+      
+      if (comments.length === 0) {
+        list.innerHTML = '<p style="color: #666; text-align: center;">Пока нет комментариев</p>';
+        return;
+      }
+      
+      list.innerHTML = comments.map(c => `
+        <div class="comment">
+          <div class="comment-author">${escapeHtml(c.author)}</div>
+          <div class="comment-content">${escapeHtml(c.content)}</div>
+        </div>
+      `).join('');
+    }
+
+    function escapeHtml(text) {
+      const div = document.createElement('div');
+      div.textContent = text;
+      return div.innerHTML;
+    }
+
+    async function likeCircle() {
+      if (!currentCircle) return;
+
+      try {
+        const response = await fetch(`/api/circles/${currentCircle.id}/like`, {
+          method: 'POST',
+        });
+
+        if (response.ok) {
+          currentCircle.likes++;
+          document.getElementById('likeCount').textContent = currentCircle.likes;
+        } else {
+          const data = await response.json();
+          alert(data.error || '❌ Не удалось поставить лайк');
+        }
+      } catch (error) {
+        alert('❌ Ошибка: ' + error.message);
+      }
+    }
+
+    async function addComment() {
+      if (!currentCircle) return;
+
+      const author = document.getElementById('commentAuthor').value.trim();
+      const content = document.getElementById('commentContent').value.trim();
+
+      if (!author || !content) {
+        alert('Введите имя и комментарий');
+        return;
+      }
+
+      try {
+        const response = await fetch(`/api/circles/${currentCircle.id}/comments`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ author, content }),
+        });
+
+        if (response.ok) {
+          const data = await response.json();
+          if (!currentCircle.comments) currentCircle.comments = [];
+          currentCircle.comments.unshift(data.comment);
+          renderComments(currentCircle.comments);
+          document.getElementById('commentContent').value = '';
+        } else {
+          const data = await response.json();
+          alert(data.error || '❌ Не удалось добавить комментарий');
+        }
+      } catch (error) {
+        alert('❌ Ошибка: ' + error.message);
+      }
+    }
+
+    function showReportModal() {
+      document.getElementById('reportModal').classList.remove('hidden');
+    }
+
+    function hideReportModal() {
+      document.getElementById('reportModal').classList.add('hidden');
+      document.getElementById('reportReason').value = '';
+    }
+
+    async function submitReport() {
+      if (!currentCircle) return;
+
+      const reason = document.getElementById('reportReason').value.trim();
+      if (!reason) {
+        alert('Укажите причину жалобы');
+        return;
+      }
+
+      try {
+        const response = await fetch(`/api/circles/${currentCircle.id}/report`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ reason }),
+        });
+
+        if (response.ok) {
+          alert('✅ Жалоба отправлена');
+          hideReportModal();
+          currentCircle.complaints++;
+          document.getElementById('complaintCount').textContent = currentCircle.complaints;
+          
+          // If complaints reached 5, reload
+          if (currentCircle.complaints >= 5) {
+            setTimeout(() => loadRandomCircle(), 1000);
+          }
+        } else {
+          const data = await response.json();
+          alert(data.error || '❌ Не удалось отправить жалобу');
+        }
+      } catch (error) {
+        alert('❌ Ошибка: ' + error.message);
+      }
+    }
+
+    // Load a random circle on page load
+    window.addEventListener('load', () => {
+      loadRandomCircle();
+    });
+  </script>
+</body>
+</html>

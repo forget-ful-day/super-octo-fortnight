@@ -1,0 +1,427 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Админ панель - Circle Video</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      background: linear-gradient(135deg, #2c3e50 0%, #4ca1af 100%);
+      min-height: 100vh;
+      padding: 20px;
+    }
+
+    .container {
+      max-width: 1200px;
+      margin: 0 auto;
+    }
+
+    h1 {
+      color: white;
+      text-align: center;
+      margin-bottom: 30px;
+      text-shadow: 2px 2px 4px rgba(0,0,0,0.3);
+    }
+
+    .nav {
+      display: flex;
+      gap: 10px;
+      margin-bottom: 20px;
+      justify-content: center;
+    }
+
+    .nav button {
+      background: rgba(255,255,255,0.2);
+      color: white;
+      border: 2px solid white;
+      padding: 10px 20px;
+      border-radius: 8px;
+      cursor: pointer;
+      font-size: 16px;
+      transition: all 0.3s;
+    }
+
+    .nav button:hover,
+    .nav button.active {
+      background: white;
+      color: #2c3e50;
+    }
+
+    .card {
+      background: white;
+      border-radius: 15px;
+      padding: 25px;
+      margin-bottom: 20px;
+      box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+    }
+
+    .stats-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 20px;
+      margin-bottom: 20px;
+    }
+
+    .stat-card {
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      color: white;
+      padding: 20px;
+      border-radius: 10px;
+      text-align: center;
+    }
+
+    .stat-value {
+      font-size: 36px;
+      font-weight: bold;
+    }
+
+    .stat-label {
+      font-size: 14px;
+      opacity: 0.9;
+      margin-top: 5px;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 15px;
+    }
+
+    th, td {
+      padding: 12px;
+      text-align: left;
+      border-bottom: 1px solid #ddd;
+    }
+
+    th {
+      background: #f8f9fa;
+      font-weight: bold;
+      color: #2c3e50;
+    }
+
+    tr:hover {
+      background: #f8f9fa;
+    }
+
+    .btn-danger {
+      background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+      color: white;
+      border: none;
+      padding: 8px 15px;
+      border-radius: 5px;
+      cursor: pointer;
+      font-size: 14px;
+    }
+
+    .btn-danger:hover {
+      opacity: 0.8;
+    }
+
+    .video-preview {
+      width: 100px;
+      height: 100px;
+      border-radius: 50%;
+      object-fit: cover;
+      background: #000;
+    }
+
+    .hidden {
+      display: none;
+    }
+
+    .loading {
+      text-align: center;
+      padding: 40px;
+      color: #667eea;
+      font-size: 18px;
+    }
+
+    .badge {
+      display: inline-block;
+      padding: 4px 8px;
+      border-radius: 4px;
+      font-size: 12px;
+      font-weight: bold;
+    }
+
+    .badge-danger {
+      background: #f5576c;
+      color: white;
+    }
+
+    .badge-warning {
+      background: #f093fb;
+      color: white;
+    }
+
+    .back-link {
+      position: fixed;
+      bottom: 20px;
+      right: 20px;
+      background: rgba(255,255,255,0.2);
+      color: white;
+      padding: 10px 15px;
+      border-radius: 8px;
+      text-decoration: none;
+      font-size: 14px;
+    }
+
+    .back-link:hover {
+      background: rgba(255,255,255,0.3);
+    }
+
+    .section {
+      display: none;
+    }
+
+    .section.active {
+      display: block;
+    }
+
+    .complaint-reason {
+      max-width: 300px;
+      word-wrap: break-word;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>🔧 Админ панель</h1>
+
+    <div class="nav">
+      <button onclick="showSection('circles')" class="active" id="navCircles">Кружки</button>
+      <button onclick="showSection('complaints')" id="navComplaints">Жалобы</button>
+      <button onclick="showSection('stats')" id="navStats">Статистика</button>
+    </div>
+
+    <!-- Circles Section -->
+    <div class="section active" id="circlesSection">
+      <div class="card">
+        <h2>Все кружки</h2>
+        <div id="circlesLoading" class="loading">Загрузка...</div>
+        <table id="circlesTable" class="hidden">
+          <thead>
+            <tr>
+              <th>Превью</th>
+              <th>ID</th>
+              <th>Лайки</th>
+              <th>Жалобы</th>
+              <th>Дата</th>
+              <th>Действия</th>
+            </tr>
+          </thead>
+          <tbody id="circlesBody"></tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- Complaints Section -->
+    <div class="section" id="complaintsSection">
+      <div class="card">
+        <h2>Все жалобы</h2>
+        <div id="complaintsLoading" class="loading">Загрузка...</div>
+        <table id="complaintsTable" class="hidden">
+          <thead>
+            <tr>
+              <th>ID жалобы</th>
+              <th>Кружок</th>
+              <th>Причина</th>
+              <th>IP</th>
+              <th>Дата</th>
+              <th>Действия</th>
+            </tr>
+          </thead>
+          <tbody id="complaintsBody"></tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- Stats Section -->
+    <div class="section" id="statsSection">
+      <div class="card">
+        <h2>Статистика платформы</h2>
+        <div id="statsLoading" class="loading">Загрузка...</div>
+        <div class="stats-grid hidden" id="statsGrid">
+          <div class="stat-card">
+            <div class="stat-value" id="totalCircles">0</div>
+            <div class="stat-label">Всего кружков</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-value" id="totalComments">0</div>
+            <div class="stat-label">Всего комментариев</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-value" id="totalLikes">0</div>
+            <div class="stat-label">Всего лайков</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-value" id="totalComplaints">0</div>
+            <div class="stat-label">Всего жалоб</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <a href="/" class="back-link">← На сайт</a>
+
+  <script>
+    function showSection(section) {
+      document.querySelectorAll('.section').forEach(s => s.classList.remove('active'));
+      document.querySelectorAll('.nav button').forEach(b => b.classList.remove('active'));
+      
+      document.getElementById(`${section}Section`).classList.add('active');
+      document.getElementById(`nav${section.charAt(0).toUpperCase() + section.slice(1)}`).classList.add('active');
+      
+      if (section === 'circles') loadCircles();
+      if (section === 'complaints') loadComplaints();
+      if (section === 'stats') loadStats();
+    }
+
+    async function loadCircles() {
+      const loading = document.getElementById('circlesLoading');
+      const table = document.getElementById('circlesTable');
+      const tbody = document.getElementById('circlesBody');
+      
+      loading.classList.remove('hidden');
+      table.classList.add('hidden');
+      
+      try {
+        const response = await fetch('/api/circles');
+        const data = await response.json();
+        
+        if (data.circles.length === 0) {
+          loading.textContent = 'Нет кружков';
+          return;
+        }
+        
+        tbody.innerHTML = data.circles.map(circle => `
+          <tr>
+            <td>
+              <video class="video-preview" src="${circle.github_url.replace('/blob/', '/raw/')}"></video>
+            </td>
+            <td>${circle.id.substring(0, 8)}...</td>
+            <td>${circle.likes}</td>
+            <td>
+              ${circle.complaints >= 3 
+                ? `<span class="badge badge-danger">${circle.complaints}</span>` 
+                : circle.complaints}
+            </td>
+            <td>${new Date(circle.created_at * 1000).toLocaleDateString()}</td>
+            <td>
+              <button class="btn-danger" onclick="deleteCircle('${circle.id}')">Удалить</button>
+            </td>
+          </tr>
+        `).join('');
+        
+        loading.classList.add('hidden');
+        table.classList.remove('hidden');
+      } catch (error) {
+        loading.textContent = 'Ошибка загрузки: ' + error.message;
+      }
+    }
+
+    async function deleteCircle(id) {
+      if (!confirm('Вы уверены, что хотите удалить этот кружок?')) return;
+      
+      try {
+        const response = await fetch(`/api/admin/circles/${id}`, {
+          method: 'DELETE',
+        });
+        
+        if (response.ok) {
+          alert('✅ Кружок удален');
+          loadCircles();
+        } else {
+          const data = await response.json();
+          alert('❌ Ошибка: ' + data.error);
+        }
+      } catch (error) {
+        alert('❌ Ошибка: ' + error.message);
+      }
+    }
+
+    async function loadComplaints() {
+      const loading = document.getElementById('complaintsLoading');
+      const table = document.getElementById('complaintsTable');
+      const tbody = document.getElementById('complaintsBody');
+      
+      loading.classList.remove('hidden');
+      table.classList.add('hidden');
+      
+      try {
+        const response = await fetch('/api/admin/complaints');
+        const data = await response.json();
+        
+        if (data.complaints.length === 0) {
+          loading.textContent = 'Нет жалоб';
+          return;
+        }
+        
+        tbody.innerHTML = data.complaints.map(complaint => `
+          <tr>
+            <td>${complaint.id.substring(0, 8)}...</td>
+            <td>
+              <video class="video-preview" src="${complaint.github_url.replace('/blob/', '/raw/')}"></video>
+              <br>
+              <small>${complaint.filename}</small>
+            </td>
+            <td class="complaint-reason">${escapeHtml(complaint.reason)}</td>
+            <td>${complaint.user_ip}</td>
+            <td>${new Date(complaint.created_at * 1000).toLocaleString()}</td>
+            <td>
+              <button class="btn-danger" onclick="deleteCircle('${complaint.circle_id}')">Удалить кружок</button>
+            </td>
+          </tr>
+        `).join('');
+        
+        loading.classList.add('hidden');
+        table.classList.remove('hidden');
+      } catch (error) {
+        loading.textContent = 'Ошибка загрузки: ' + error.message;
+      }
+    }
+
+    async function loadStats() {
+      const loading = document.getElementById('statsLoading');
+      const grid = document.getElementById('statsGrid');
+      
+      loading.classList.remove('hidden');
+      grid.classList.add('hidden');
+      
+      try {
+        const response = await fetch('/api/admin/stats');
+        const data = await response.json();
+        
+        document.getElementById('totalCircles').textContent = data.stats.totalCircles;
+        document.getElementById('totalComments').textContent = data.stats.totalComments;
+        document.getElementById('totalLikes').textContent = data.stats.totalLikes;
+        document.getElementById('totalComplaints').textContent = data.stats.totalComplaints;
+        
+        loading.classList.add('hidden');
+        grid.classList.remove('hidden');
+      } catch (error) {
+        loading.textContent = 'Ошибка загрузки: ' + error.message;
+      }
+    }
+
+    function escapeHtml(text) {
+      const div = document.createElement('div');
+      div.textContent = text;
+      return div.innerHTML;
+    }
+
+    // Load circles by default
+    window.addEventListener('load', () => {
+      loadCircles();
+    });
+  </script>
+</body>
+</html>
